@@ -13,65 +13,49 @@ module MLBGameday
       @gamecenter = gamecenter
       @boxscore   = boxscore
 
-      @home_team = @api.team linescore.xpath('//game/@home_name_abbrev').text
-      @away_team = @api.team linescore.xpath('//game/@away_name_abbrev').text
+      define_game_attribute_methods unless self.methods.grep(/first_pitch_et/).any? # don't redefine every time
+
+      @home_team = @api.team home_name_abbrev
+      @away_team = @api.team away_name_abbrev
     end
 
     def teams
       [@home_team, @away_team]
     end
 
-    def venue
-      @linescore.xpath('//game/@venue').text
-    end
-
     def home_start_time(ampm: true)
       if ampm
-        [
-          @linescore.xpath('//game/@home_time').text,
-          @linescore.xpath('//game/@home_ampm').text,
-          @linescore.xpath('//game/@home_time_zone').text
-        ].join ' '
+        "#{home_time} #{home_ampm} #{home_time_zone}"
       else
-        [
-          @linescore.xpath('//game/@home_time').text,
-          @linescore.xpath('//game/@home_time_zone').text
-        ].join ' '
+        "#{home_time} #{home_time_zone}"
       end
     end
 
     def away_start_time(ampm: true)
       if ampm
-        [
-          @linescore.xpath('//game/@away_time').text,
-          @linescore.xpath('//game/@away_ampm').text,
-          @linescore.xpath('//game/@away_time_zone').text
-        ].join ' '
+        "#{away_time} #{away_ampm} #{away_time_zone}"
       else
-        [
-          @linescore.xpath('//game/@away_time').text,
-          @linescore.xpath('//game/@away_time_zone').text
-        ].join ' '
+        "#{away_time} #{away_time_zone}"
       end
-    end
-
-    # Preview, Pre-Game, In Progress, Final
-    def status
-      @status ||= @linescore.xpath('//game/@status').text
     end
 
     # [3, Top/Middle/Bottom/End]
     def inning
-      return [0, '?'] unless @linescore.xpath('//game/@inning')
+      return [0, '?'] unless inning
 
-      [@linescore.xpath('//game/@inning').text.to_i,
-       @linescore.xpath('//game/@inning_state').text]
+      [inning.to_i,
+       inning_state]
     end
 
     def runners
       first, second, third = [nil, nil, nil]
 
       [first, second, third]
+    end
+
+    def tied?
+      return true if away_team_runs == home_team_runs
+      false
     end
 
     def over?
@@ -92,13 +76,13 @@ module MLBGameday
     end
 
     def home_record
-      [@linescore.xpath('//game/@home_win'),
-       @linescore.xpath('//game/@home_loss')].map(&:text).map(&:to_i)
+      [home_win,
+       home_loss].map(&:to_i)
     end
 
     def away_record
-      [@linescore.xpath('//game/@away_win'),
-       @linescore.xpath('//game/@away_loss')].map(&:text).map(&:to_i)
+      [away_win,
+       away_loss].map(&:to_i)
     end
 
     def current_pitcher
@@ -147,8 +131,8 @@ module MLBGameday
     def score
       return [0, 0] unless in_progress? || over?
 
-      [@linescore.xpath('//game/@home_team_runs').text,
-       @linescore.xpath('//game/@away_team_runs').text].map(&:to_i)
+      [home_team_runs,
+       away_team_runs].map(&:to_i)
     end
 
     def home_pitcher
@@ -157,7 +141,7 @@ module MLBGameday
       case status
       when 'In Progress'
         # The xpath changes based on which half of the inning it is
-        if @linescore.xpath('//game/@top_inning').text == 'Y'
+        if top_inning == 'Y'
           opposing_pitcher
         else
           current_pitcher
@@ -177,7 +161,7 @@ module MLBGameday
       case status
       when 'In Progress'
         # The xpath changes based on which half of the inning it is
-        if @linescore.xpath('//game/@top_inning').text == 'Y'
+        if top_inning == 'Y'
           current_pitcher
         else
           opposing_pitcher
@@ -189,6 +173,17 @@ module MLBGameday
 
         home > away ? losing_pitcher : winning_pitcher
       end
+    end
+
+    def current_linescore
+      innings = @linescore.xpath('//game/linescore')
+      innings.each_with_object({}) do |inning, linescore|
+        inning_number = inning.attributes["inning"].value
+        home_team_runs = inning.attributes["home_inning_runs"].value
+        away_team_runs = inning.attributes["away_inning_runs"].value
+        linescore[inning_number] = [home_team_runs, away_team_runs]
+      end
+
     end
 
     def home_tv
@@ -220,12 +215,25 @@ module MLBGameday
     end
 
     def date
-      @date ||= Chronic.parse @linescore.xpath('//game/@original_date').text
+      @date ||= Chronic.parse original_date
     end
 
     # So we don't get huge printouts
     def inspect
       %(#<MLBGameday::Game @gid="#{@gid}">)
     end
+
+    def define_game_attribute_methods
+      game_attributes = @linescore.xpath('//game').first.attributes.keys.map(&:to_sym)
+      game_attributes.each {|name| Game.define_attribute(name)}
+    end
+
+    # Defines all hte game attributes as methods
+    def self.define_attribute(name)
+      define_method(name) do
+        @linescore.xpath("//game/@#{name}").text
+      end
+    end
+
   end
 end
