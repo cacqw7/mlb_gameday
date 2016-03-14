@@ -58,4 +58,11 @@ class TestGame < MiniTest::Test
 
     assert @free_game.free?
   end
+
+  def test_dynamic_methods
+    DYNAMIC_GAME_METHODS.each do |dynamic_method|
+      assert @game.respond_to? dynamic_method
+    end
+  end
+
 end
