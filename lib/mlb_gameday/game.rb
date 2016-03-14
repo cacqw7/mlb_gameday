@@ -23,24 +23,16 @@ module MLBGameday
       [@home_team, @away_team]
     end
 
-    def home_start_time(ampm: true)
-      if ampm
-        "#{home_time} #{home_ampm} #{home_time_zone}"
-      else
-        "#{home_time} #{home_time_zone}"
-      end
+    def home_start_time
+      "#{home_time} #{home_ampm} #{home_time_zone}"
     end
 
-    def away_start_time(ampm: true)
-      if ampm
-        "#{away_time} #{away_ampm} #{away_time_zone}"
-      else
-        "#{away_time} #{away_time_zone}"
-      end
+    def away_start_time
+      "#{away_time} #{away_ampm} #{away_time_zone}"
     end
 
     # [3, Top/Middle/Bottom/End]
-    def inning
+    def inning_status
       return [0, '?'] unless inning
 
       [inning.to_i,
